@@ -7,7 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from models.users import UserPublic, UserCreate, UserLogin, UserDB
 from db import get_database
-
+from .auth import pwd_context, JWT_ALGORITHM, JWT_SECRET
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -15,6 +15,8 @@ handler = logging.StreamHandler(sys.stdout)
 formatter = logging.Formatter("%(asctime)s - %(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+
+
 
 
 router = APIRouter()
@@ -57,11 +59,12 @@ async def new_user_reg(
     """
     logger.info(f"Registration user email: {user.email} | username: {user.username}")
     user_db = await check_user(user.email, database)
+    hashed_password = pwd_context.hash(user.password)
     new_user = await database.users.insert_one(
         {
             "username": user.username,
             "email": user.email,
-            "password": user.password,
+            "password": hashed_password,
             "varified": False,
         }
     )
@@ -93,7 +96,8 @@ async def user_login(
     user_db = await database.users.find_one({"email": user.email})
     if user_db is None:
         raise HTTPException(status_code=404, detail="Not Found")
-    if user_db["password"] != user.password:
+    verify_password = pwd_context.verify(user.password, user_db["password"])
+    if not verify_password:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return "token"
 
